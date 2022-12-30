@@ -9,14 +9,12 @@ Dataset:
 [ESC-50](https://github.com/karoldvl/ESC-50) (testing set)  
 [Freiburg 106](http://www.csc.kth.se/~jastork/pages/datasets.html) (training set, negative samples)    
 
-3rdparty libraries:  
+3rdparty libraries (use conan to figure them out automatically):
 [libsndfile](http://www.mega-nerd.com/libsndfile/#Download)  
 [fftw3](http://www.fftw.org/download.html)  
 [opencv](https://github.com/opencv/opencv)  
 [darknet](https://github.com/pjreddie/darknet)  
 [portaudio](http://www.portaudio.com/download.html)
-
-
 
 ## Preprocessing
 
