@@ -36,3 +36,5 @@ target_link_libraries(
     dbd
     opencv::opencv
 )
+
+set_property(TARGET classification_from_file PROPERTY CXX_STANDARD 20)
