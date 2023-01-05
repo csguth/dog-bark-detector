@@ -11,9 +11,21 @@ add_library(
     dbd
     common.c
     create_spectrogram.c
-    run_darknet.c
     spectrum.c
     window.c
+)
+
+add_library(
+    dbdpp
+    network.cpp
+    network.hpp
+)
+set_property(TARGET dbdpp PROPERTY CXX_STANDARD 20)
+
+
+target_link_libraries(dbdpp
+    PRIVATE
+    darknet::darknet
 )
 
 target_link_libraries(
@@ -34,6 +46,7 @@ target_link_libraries(
     classification_from_file
     PRIVATE
     dbd
+    dbdpp
     opencv::opencv
 )
 

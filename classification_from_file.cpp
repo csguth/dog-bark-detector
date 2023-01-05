@@ -12,7 +12,7 @@
 #include "spectrum.h"
 #include <opencv2/core/core.hpp>
 #include <opencv2/highgui/highgui.hpp>
-#include "run_darknet.h"
+#include "network.hpp"
 
 
 static void
@@ -507,8 +507,9 @@ int main
     unsigned char colour[3] = {0, 0, 0};
     
     const int STEPS = 1 + (TOTAL_SECS - WIN_SECS) / STEP_SECS;
-    init_net(av[5], av[6], SPECTROGRAM_W, SPECTROGRAM_H, 3);
     
+    auto net = Network::init(av[5], av[6], SPECTROGRAM_W, SPECTROGRAM_H, 3).value();
+
     for (i = 0; i < STEPS; ++i)
     {
         for (j = 0; j < SPECTROGRAM_W; ++j)
@@ -579,7 +580,7 @@ int main
         }
         
         
-        float *netout = run_net(im.data);
+        float *netout = net.run(im.data);
         printf("%f, %f\n", netout[0], netout[1]);
         if (netout[0] > 0.9f)
         {
@@ -601,7 +602,6 @@ int main
         }
     }
     
-    free_net();
     
     destroy_spectrum(spec);
     for (i = 0; i < SPECTROGRAM_W ; ++i)
