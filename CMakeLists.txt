@@ -8,15 +8,12 @@ find_package(darknet REQUIRED)
 find_package(OpenCV REQUIRED)
 
 add_library(
-    dbd
-    common.c
-    create_spectrogram.c
-    spectrum.c
-    window.c
-)
-
-add_library(
     dbdpp
+    common.c
+    window.cpp
+    window.h
+    spectrum.cpp
+    spectrum.h
     network.cpp
     network.hpp
 )
@@ -24,12 +21,6 @@ set_property(TARGET dbdpp PROPERTY CXX_STANDARD 20)
 
 
 target_link_libraries(dbdpp
-    PRIVATE
-    darknet::darknet
-)
-
-target_link_libraries(
-    dbd
     PUBLIC
     SndFile::SndFile
     FFTW3::FFTW3

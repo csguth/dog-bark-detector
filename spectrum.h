@@ -1,26 +1,22 @@
+#ifndef SPECTRUM_H
+#define SPECTRUM_H
+#endif
+
 #ifdef __cplusplus
 extern "C"{
 #endif
 
-typedef struct
-{	int speclen ;
-	enum WINDOW_FUNCTION wfunc ;
-	fftw_plan plan ;
+typedef struct spectrum spectrum;
+typedef enum WINDOW_FUNCTION WINDOW_FUNCTION;
 
-	double *time_domain ;
-	double *window ;
-	double *freq_domain ;
-	double *mag_spec ;
-
-	double data [] ;
-} spectrum ;
-
-
-spectrum * create_spectrum (int speclen, enum WINDOW_FUNCTION window_function) ;
+spectrum * create_spectrum (int speclen, WINDOW_FUNCTION window_function) ;
 
 void destroy_spectrum (spectrum * spec) ;
 
 double calc_magnitude_spectrum (spectrum * spec) ;
+
+double * spectrum_time_domain(spectrum*);
+double * spectrum_mag_spec(spectrum*);
 
 #ifdef __cplusplus
 }

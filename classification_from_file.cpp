@@ -503,19 +503,18 @@ int main
     }
     
     cv::Mat im(SPECTROGRAM_H, SPECTROGRAM_W, CV_8UC3);
-    unsigned char *imdata = im.data;
     unsigned char colour[3] = {0, 0, 0};
     
     const int STEPS = 1 + (TOTAL_SECS - WIN_SECS) / STEP_SECS;
     
     auto net = Network::init(av[5], av[6], SPECTROGRAM_W, SPECTROGRAM_H, 3).value();
-
+    
     for (i = 0; i < STEPS; ++i)
     {
         for (j = 0; j < SPECTROGRAM_W; ++j)
         {
             int datalen = 2 * speclen;
-            double *data = spec->time_domain;
+            double *data = spectrum_time_domain(spec);
             memset(data, 0, 2 * speclen * sizeof(double));
             
             sf_count_t start = ((j + i * STEP_SECS * SPECTROGRAM_W / WIN_SECS) * infile.samplerate() * WIN_SECS) / SPECTROGRAM_W - speclen;
@@ -562,7 +561,7 @@ int main
                 }
             }
             calc_magnitude_spectrum(spec);
-            interp_spec(mag_spec[j], SPECTROGRAM_H, spec->mag_spec, speclen, MIN_FREQ, MAX_FREQ, infile.samplerate());
+            interp_spec(mag_spec[j], SPECTROGRAM_H, spectrum_mag_spec(spec), speclen, MIN_FREQ, MAX_FREQ, infile.samplerate());
         }
         
         // draw spectrogram
@@ -573,17 +572,17 @@ int main
                 mag_spec[j][k] /= MAG_TO_NORMALIZE;
                 mag_spec[j][k] = (mag_spec[j][k] < LINEAR_SPEC_FLOOR) ? SPEC_FLOOR_DB : 20.0 * log10(mag_spec[j][k]);
                 get_colour_map_value(mag_spec[j][k], SPEC_FLOOR_DB, colour);
-                imdata[((SPECTROGRAM_H - 1 - k) * im.cols + j) * 3] = colour[2];
-                imdata[((SPECTROGRAM_H - 1 - k) * im.cols + j) * 3 + 1] = colour[1];
-                imdata[((SPECTROGRAM_H - 1 - k) * im.cols + j) * 3 + 2] = colour[0];
+                im.data[((SPECTROGRAM_H - 1 - k) * im.cols + j) * 3] = colour[2];
+                im.data[((SPECTROGRAM_H - 1 - k) * im.cols + j) * 3 + 1] = colour[1];
+                im.data[((SPECTROGRAM_H - 1 - k) * im.cols + j) * 3 + 2] = colour[0];
             }
         }
         
-        
-        float *netout = net.run(im.data);
-        printf("%f, %f\n", netout[0], netout[1]);
+
+        auto const netout = net.run(im.data);
         if (netout[0] > 0.9f)
         {
+            printf("woof woof!\n");
             cv::rectangle(im, cv::Rect(20, 10, SPECTROGRAM_W - 40, SPECTROGRAM_H - 20), cv::Scalar(255, 0, 0), 15, 16);
             cv::putText(im, "dog bark", cv::Point(SPECTROGRAM_W/2-40, SPECTROGRAM_H/2), cv::FONT_HERSHEY_DUPLEX, 1.0, cv::Scalar(255, 0, 0), 2, 16);
         }

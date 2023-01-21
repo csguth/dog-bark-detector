@@ -625,12 +625,12 @@ render_to_surface (const RENDER * render, SNDFILE *infile, int samplerate, sf_co
     for (w = 0 ; w < width ; w++)
     {	double single_max ;
 
-        read_mono_audio (infile, filelen, spec->time_domain, 2 * speclen, w, width) ;
+        read_mono_audio (infile, filelen, spectrum_time_domain(spec), 2 * speclen, w, width) ;
 
         single_max = calc_magnitude_spectrum (spec) ;
         max_mag = MAX (max_mag, single_max) ;
 
-        interp_spec (mag_spec [w], height, spec->mag_spec, speclen, render, samplerate) ;
+        interp_spec (mag_spec [w], height, spectrum_mag_spec(spec), speclen, render, samplerate) ;
         } ;
 
     destroy_spectrum (spec) ;

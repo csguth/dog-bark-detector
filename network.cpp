@@ -49,7 +49,7 @@ std::optional<Network> Network::init(std::filesystem::path cfgfile,
     return {};
 }
 
-float* Network::run(unsigned char* indata)
+float const * const Network::run(unsigned char* indata)
 {
     int i = 0;
     int j = 0;

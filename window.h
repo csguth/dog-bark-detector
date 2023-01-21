@@ -1,3 +1,6 @@
+#ifndef WINDOW_H
+#define WINDOW_H
+#endif
 /*
 ** Copyright (C) 2007-2015 Erik de Castro Lopo <erikd@mega-nerd.com>
 **
@@ -14,6 +17,9 @@
 ** You should have received a copy of the GNU General Public License
 ** along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
+#ifdef __cplusplus
+extern "C"{
+#endif
 
 enum WINDOW_FUNCTION { RECTANGULAR = 0, KAISER = 1, NUTTALL = 2, HANN = 3 } ;
 
@@ -23,3 +29,6 @@ void calc_nuttall_window (double * data, int datalen) ;
 
 void calc_hann_window (double * data, int datalen) ;
 
+#ifdef __cplusplus
+}
+#endif

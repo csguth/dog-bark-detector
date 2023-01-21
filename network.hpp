@@ -18,7 +18,7 @@ public:
                                        const int imh,
                                        const int imch);
     
-    float* run(unsigned char* data);
+    float const * const run(unsigned char* data);
     
     
     

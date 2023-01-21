@@ -14,13 +14,13 @@
 ** You should have received a copy of the GNU General Public License
 ** along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
+#include "window.h"
 
 #include <stdio.h>
 #include <stdlib.h>
 #include <assert.h>
 #include <math.h>
 
-#include "window.h"
 
 #define ARRAY_LEN(x)		((int) (sizeof (x) / sizeof (x [0])))
 
