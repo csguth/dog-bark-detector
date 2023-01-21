@@ -15,11 +15,11 @@ public:
     Spectrum& operator=(const Spectrum&) = delete;
     friend void swap(Spectrum&, Spectrum&);
     
-    static std::optional<Spectrum> create(int speclen, window_function_t windowFunction) noexcept;
+    static std::optional<Spectrum> create(int speclen, double* timeDomain, double* freqDomain) noexcept;
+
+    void executeFft();
     
-    double* magSpec();
-    double* timeDomain();
-    double calcMagnitudeSpectrum();
+    void applyWindow(double* data, size_t dataLen) const;
     
 private:
     Spectrum();

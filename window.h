@@ -21,16 +21,7 @@
 extern "C"{
 #endif
 
-enum class WindowFunction
-{
-    RECTANGULAR, KAISER, NUTTALL, HANN
-};
-
 void calc_kaiser_window (double * data, int datalen, double beta) ;
-
-void calc_nuttall_window (double * data, int datalen) ;
-
-void calc_hann_window (double * data, int datalen) ;
 
 #ifdef __cplusplus
 }

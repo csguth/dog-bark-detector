@@ -331,14 +331,22 @@ magindex_to_specindex (int speclen, int maglen, int magindex, double min_freq, d
     return (freq * speclen / (samplerate / 2)) ;
 }
 
+double magSpec(const std::vector<double>& freqDomain, size_t index)
+{
+    if (index == 0 || index == freqDomain.size()-1)
+    {
+        return freqDomain.at(index);
+    }
+    auto const re = freqDomain.at(index);
+    auto const im = freqDomain.at(freqDomain.size() - index);
+    return sqrt(re * re + im * im);
+}
+
 /* Map values from the spectrogram onto an array of magnitudes, the values
  ** for display. Reads spec[0..speclen], writes mag[0..maglen-1].
  */
-static void
-interp_spec (float * mag, int maglen, const double *spec, int speclen, const double min_freq, const double max_freq, int samplerate)
+std::vector<float> interp_spec (const size_t maglen, const std::vector<double>& freqDomain, const double min_freq, const double max_freq, int samplerate)
 {
-    int k ;
-    
     /* Map each output coordinate to where it depends on in the input array.
      ** If there are more input values than output values, we need to average
      ** a range of inputs.
@@ -352,54 +360,59 @@ interp_spec (float * mag, int maglen, const double *spec, int speclen, const dou
      ** in the output represent the energy in the sound at min_ and max_freq Hz.
      */
     
-    for (k = 0 ; k < maglen ; k++)
-    {	/* Average the pixels in the range it comes from */
-        double current = magindex_to_specindex (speclen, maglen, k,
-                                                min_freq, max_freq, samplerate,
-                                                0.0) ;
-        double next = magindex_to_specindex (speclen, maglen, k+1,
-                                             min_freq, max_freq, samplerate,
-                                             0.0) ;
+    auto mag = std::vector<float>(maglen);
+    auto const magSpecLen = (freqDomain.size()/2)+1;
+    for (size_t k = 0 ; k < maglen; k++)
+    {
+        /* Average the pixels in the range it comes from */
+        auto current = magindex_to_specindex(magSpecLen, maglen, k, min_freq, max_freq, samplerate, 0.0);
+        auto const next = magindex_to_specindex (magSpecLen, maglen, k+1, min_freq, max_freq, samplerate, 0.0);
         
         /* Range check: can happen if --max-freq > samplerate / 2 */
-        if (current > speclen)
-        {	mag [k] = 0.0 ;
-            return ;
-        } ;
+        if (current > magSpecLen)
+        {
+            mag.at(k) = 0.0;
+            return mag;
+        }
         
-        if (next > current + 1)
-        {	/* The output indices are more sparse than the input indices
+        auto const delta = [](const double value){
+            return value - std::floor(value);
+        };
+        
+        if (current + 1.0 < next) {
+            /* The output indices are more sparse than the input indices
              ** so average the range of input indices that map to this output,
              ** making sure not to exceed the input array (0..speclen inclusive)
              */
             /* Take a proportional part of the first sample */
-            double count = 1.0 - (current - floor (current)) ;
-            double sum = spec [(int) current] * count ;
+            auto count = 1.0 - delta(current);
+            auto sum = magSpec(freqDomain, static_cast<size_t>(current)) * count ;
             
-            while ((current += 1.0) < next && (int) current <= speclen)
-            {	sum += spec [(int) current] ;
+            while ((current += 1.0) < next && static_cast<size_t>(current) <= magSpecLen)
+            {
+                sum += magSpec(freqDomain, static_cast<size_t>(current)) ;
                 count += 1.0 ;
             }
             /* and part of the last one */
-            if ((int) next <= speclen)
-            {	sum += spec [(int) next] * (next - floor (next)) ;
-                count += next - floor (next) ;
-            } ;
+            if (static_cast<size_t>(next) <= magSpecLen)
+            {
+                sum += magSpec(freqDomain, static_cast<size_t>(next)) * delta(next) ;
+                count += delta(next) ;
+            }
             
             mag [k] = sum / count ;
+        } else {
+            /* The output indices are more densely packed than the input indices
+             ** so interpolate between input values to generate more output values.
+             */
+            /* Take a weighted average of the nearest values */
+            auto const deltaCurrent = delta(current);
+            mag[k] = magSpec(freqDomain, static_cast<size_t>(current))     * (1.0 - deltaCurrent)
+                   + magSpec(freqDomain, static_cast<size_t>(current)+1)   * (deltaCurrent);
         }
-        else
-        /* The output indices are more densely packed than the input indices
-         ** so interpolate between input values to generate more output values.
-         */
-        {	/* Take a weighted average of the nearest values */
-            mag [k] = spec [(int) current] * (1.0 - (current - floor (current)))
-            + spec [(int) current + 1] * (current - floor (current)) ;
-        } ;
-    } ;
-    
-    return ;
-} /* interp_spec */
+    }
+    return mag;
+}
 
 /* Pick the best FFT length good for FFTW?
  **
@@ -490,14 +503,12 @@ int main
             break;
         }
     }
-    auto windowFunction = [](double * data, int datalen){
-        
-        calc_kaiser_window(data, datalen, 20.0);
-        
-    };
-    auto spec = Spectrum::create(speclen, std::move(windowFunction)).value();
+    std::vector<double> timeDomain(2*speclen+1);
+    std::vector<double> freqDomain(2*speclen);
     
-    auto mag_spec = std::vector<std::vector<float>>(SPECTROGRAM_W, std::vector<float>(SPECTROGRAM_H));
+    auto spec = Spectrum::create(speclen, timeDomain.data(), freqDomain.data()).value();
+    
+    auto magSpecMatrix = std::vector<std::vector<float>>(SPECTROGRAM_W, std::vector<float>(SPECTROGRAM_H));
     
     cv::Mat im(SPECTROGRAM_H, SPECTROGRAM_W, CV_8UC3);
     unsigned char colour[3] = {0, 0, 0};
@@ -510,10 +521,12 @@ int main
     {
         for (j = 0; j < SPECTROGRAM_W; ++j)
         {
-            int datalen = 2 * speclen;
-            double *data = spec.timeDomain();
-            memset(data, 0, 2 * speclen * sizeof(double));
             
+            
+            std::fill(begin(timeDomain), end(timeDomain), 0.0);
+            auto data = timeDomain.data();
+            int datalen = timeDomain.size();
+                        
             sf_count_t start = ((j + i * STEP_SECS * SPECTROGRAM_W / WIN_SECS) * infile.samplerate() * WIN_SECS) / SPECTROGRAM_W - speclen;
             if (start >= 0)
             {
@@ -557,8 +570,9 @@ int main
                     dataout += frames_read;
                 }
             }
-            spec.calcMagnitudeSpectrum();
-            interp_spec(mag_spec[j].data(), SPECTROGRAM_H, spec.magSpec(), speclen, MIN_FREQ, MAX_FREQ, infile.samplerate());
+            spec.applyWindow(timeDomain.data(), timeDomain.size());
+            spec.executeFft();
+            magSpecMatrix[j] = interp_spec(SPECTROGRAM_H, freqDomain, MIN_FREQ, MAX_FREQ, infile.samplerate());
         }
         
         // draw spectrogram
@@ -566,9 +580,9 @@ int main
         {
             for (k = 0; k < SPECTROGRAM_H; ++k)
             {
-                mag_spec[j][k] /= MAG_TO_NORMALIZE;
-                mag_spec[j][k] = (mag_spec[j][k] < LINEAR_SPEC_FLOOR) ? SPEC_FLOOR_DB : 20.0 * log10(mag_spec[j][k]);
-                get_colour_map_value(mag_spec[j][k], SPEC_FLOOR_DB, colour);
+                magSpecMatrix[j][k] /= MAG_TO_NORMALIZE;
+                magSpecMatrix[j][k] = (magSpecMatrix[j][k] < LINEAR_SPEC_FLOOR) ? SPEC_FLOOR_DB : 20.0 * log10(magSpecMatrix[j][k]);
+                get_colour_map_value(magSpecMatrix[j][k], SPEC_FLOOR_DB, colour);
                 im.data[((SPECTROGRAM_H - 1 - k) * im.cols + j) * 3] = colour[2];
                 im.data[((SPECTROGRAM_H - 1 - k) * im.cols + j) * 3 + 1] = colour[1];
                 im.data[((SPECTROGRAM_H - 1 - k) * im.cols + j) * 3 + 2] = colour[0];
