@@ -490,7 +490,12 @@ int main
             break;
         }
     }
-    auto spec = Spectrum::create(speclen, WindowFunction::KAISER).value();
+    auto windowFunction = [](double * data, int datalen){
+        
+        calc_kaiser_window(data, datalen, 20.0);
+        
+    };
+    auto spec = Spectrum::create(speclen, std::move(windowFunction)).value();
     
     auto mag_spec = std::vector<std::vector<float>>(SPECTROGRAM_W, std::vector<float>(SPECTROGRAM_H));
     

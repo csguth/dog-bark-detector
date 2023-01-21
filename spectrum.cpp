@@ -16,66 +16,56 @@
 #include <vector>
 
 struct Spectrum::Impl {
+    
+    Impl(int speclen, window_function_t windowFunction)
+        : speclen{speclen}
+        , windowFunction{std::move(windowFunction)}
+        , time_domain(2*speclen+1)
+        , window(2*speclen)
+        , freq_domain(2*speclen)
+        , mag_spec(speclen+1)
+        , plan{ nullptr }
+    {
+        auto const plan = fftw_plan_r2r_1d (2 * speclen, time_domain.data(), freq_domain.data(), FFTW_R2HC, FFTW_MEASURE | FFTW_PRESERVE_INPUT);
+        if (plan == nullptr)
+        {
+            throw std::runtime_error{"failed to create fftw"};
+        }
+        
+        if (!this->windowFunction)
+        {
+            throw std::runtime_error{"invalid window function"};
+        }
+        this->plan = plan;
+        this->windowFunction(window.data(), window.size());
+    }
+    
     ~Impl()
     {
-        fftw_destroy_plan (plan) ;
+        if (plan != nullptr)
+        {
+            fftw_destroy_plan(plan);
+        }
     }
     
-    int speclen ;
-    WindowFunction wfunc ;
-    fftw_plan plan ;
+    const int speclen;
+    const window_function_t windowFunction;
     
-    std::vector<double> time_domain ;
-    std::vector<double> window ;
-    std::vector<double> freq_domain ;
-    std::vector<double> mag_spec ;
+    std::vector<double> time_domain;
+    std::vector<double> window;
+    std::vector<double> freq_domain;
+    std::vector<double> mag_spec;
     
-    double data [] ;
+    fftw_plan plan;
 };
 
-std::optional<Spectrum> Spectrum::create(int speclen, WindowFunction window_function) noexcept {
+std::optional<Spectrum> Spectrum::create(int speclen, window_function_t windowFunction) noexcept {
     try {
-        auto spec = Spectrum{};
-        spec.impl->wfunc = window_function ;
-        spec.impl->speclen = speclen ;
-        
-        /* mag_spec has values from [0..speclen] inclusive for 0Hz to Nyquist.
-         ** time_domain has an extra element to be able to interpolate between
-         ** samples for better time precision, hoping to eliminate artifacts.
-         */
-        spec.impl->time_domain.resize(2*speclen+1);
-        spec.impl->window.resize(2*speclen);
-        spec.impl->freq_domain.resize(2*speclen);
-        spec.impl->mag_spec.resize(speclen+1);
-        
-        spec.impl->plan = fftw_plan_r2r_1d (2 * speclen, spec.impl->time_domain.data(), spec.impl->freq_domain.data(), FFTW_R2HC, FFTW_MEASURE | FFTW_PRESERVE_INPUT) ;
-        if (spec.impl->plan == nullptr)
-        {
-            printf ("%s:%d : fftw create plan failed.\n", __func__, __LINE__) ;
-            return {};
-        } ;
-        
-        switch (spec.impl->wfunc)
-        {    case WindowFunction::RECTANGULAR :
-                break ;
-            case WindowFunction::KAISER :
-                calc_kaiser_window (spec.impl->window.data(), 2 * speclen, 20.0) ;
-                break ;
-            case WindowFunction::NUTTALL:
-                calc_nuttall_window (spec.impl->window.data(), 2 * speclen) ;
-                break ;
-            case WindowFunction::HANN :
-                calc_hann_window (spec.impl->window.data(), 2 * speclen) ;
-                break ;
-            default :
-                printf ("Internal error: Unknown window_function.\n") ;
-                return {};
-        } ;
-        
-        return spec;
-    } catch (...) {
-        return {};
-    }
+        return Spectrum{
+            std::make_unique<Impl>(speclen, std::move(windowFunction))
+        };
+    } catch (...) {}
+    return {};
 }
 
 void swap(Spectrum& lhs, Spectrum& rhs)
@@ -96,9 +86,7 @@ Spectrum& Spectrum::operator=(Spectrum&& rhs)
 }
 Spectrum::~Spectrum() noexcept = default;
 
-Spectrum::Spectrum()
-: impl{ std::make_unique<Impl>() }
-{}
+Spectrum::Spectrum() = default;
 
 double* Spectrum::magSpec()
 {
@@ -115,7 +103,7 @@ double Spectrum::calcMagnitudeSpectrum()
 
     freqlen = 2 * impl->speclen ;
 
-    if (impl->wfunc != WindowFunction::RECTANGULAR)
+//    if (impl->wfunc != WindowFunction::RECTANGULAR)
         for (k = 0 ; k < 2 * impl->speclen ; k++)
             impl->time_domain [k] *= impl->window [k] ;
 
@@ -129,13 +117,19 @@ double Spectrum::calcMagnitudeSpectrum()
     max = impl->mag_spec [0] = fabs (impl->freq_domain [0]) ;
 
     for (k = 1 ; k < impl->speclen ; k++)
-    {    double re = impl->freq_domain [k] ;
+    {
+        double re = impl->freq_domain [k] ;
         double im = impl->freq_domain [freqlen - k] ;
         impl->mag_spec [k] = sqrt (re * re + im * im) ;
         max = MAX (max, impl->mag_spec [k]) ;
-        } ;
+    } ;
     /* Lastly add the point for the Nyquist frequency */
     impl->mag_spec [impl->speclen] = fabs (impl->freq_domain [impl->speclen]) ;
 
     return max ;
 }
+
+Spectrum::Spectrum(std::unique_ptr<Impl> impl)
+: impl{std::move(impl)} {
+}
+
