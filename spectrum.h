@@ -1,24 +1,28 @@
-#ifndef SPECTRUM_H
-#define SPECTRUM_H
-#endif
+#pragma once
 
-#ifdef __cplusplus
-extern "C"{
-#endif
+#include <memory>
+#include <optional>
 
-typedef struct spectrum spectrum;
-typedef enum WINDOW_FUNCTION WINDOW_FUNCTION;
+class Spectrum final {
+public:
+    ~Spectrum() noexcept;
+    Spectrum(Spectrum&&);
+    Spectrum(const Spectrum&) = delete;
+    Spectrum& operator=(Spectrum&&);
+    Spectrum& operator=(const Spectrum&) = delete;
+    friend void swap(Spectrum&, Spectrum&);
+    
+    static std::optional<Spectrum> create(int speclen, WindowFunction window_function) noexcept;
+    
+    double* magSpec();
+    double* timeDomain();
+    double calcMagnitudeSpectrum();
+    
+private:
+    Spectrum();
+    
+private:
+    struct Impl;
+    std::unique_ptr<Impl> impl;
 
-spectrum * create_spectrum (int speclen, WINDOW_FUNCTION window_function) ;
-
-void destroy_spectrum (spectrum * spec) ;
-
-double calc_magnitude_spectrum (spectrum * spec) ;
-
-double * spectrum_time_domain(spectrum*);
-double * spectrum_mag_spec(spectrum*);
-
-#ifdef __cplusplus
-}
-#endif
-
+};

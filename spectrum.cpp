@@ -15,118 +15,127 @@
 #include <memory>
 #include <vector>
 
-struct spectrum final
-{
-    ~spectrum()
+struct Spectrum::Impl {
+    ~Impl()
     {
         fftw_destroy_plan (plan) ;
     }
     
     int speclen ;
-    enum WINDOW_FUNCTION wfunc ;
+    WindowFunction wfunc ;
     fftw_plan plan ;
-
+    
     std::vector<double> time_domain ;
     std::vector<double> window ;
     std::vector<double> freq_domain ;
     std::vector<double> mag_spec ;
-
+    
     double data [] ;
-} ;
+};
 
-
-spectrum *
-create_spectrum (int speclen, enum WINDOW_FUNCTION window_function)
-{
-    try
-    {
-        auto spec = std::make_unique<spectrum>();
-        spec->wfunc = window_function ;
-        spec->speclen = speclen ;
-
+std::optional<Spectrum> Spectrum::create(int speclen, WindowFunction window_function) noexcept {
+    try {
+        auto spec = Spectrum{};
+        spec.impl->wfunc = window_function ;
+        spec.impl->speclen = speclen ;
+        
         /* mag_spec has values from [0..speclen] inclusive for 0Hz to Nyquist.
-        ** time_domain has an extra element to be able to interpolate between
-        ** samples for better time precision, hoping to eliminate artifacts.
-        */
-        spec->time_domain.resize(2*speclen+1);
-        spec->window.resize(2*speclen);
-        spec->freq_domain.resize(2*speclen);
-        spec->mag_spec.resize(speclen+1);
-
-        spec->plan = fftw_plan_r2r_1d (2 * speclen, spec->time_domain.data(), spec->freq_domain.data(), FFTW_R2HC, FFTW_MEASURE | FFTW_PRESERVE_INPUT) ;
-        if (spec->plan == nullptr)
+         ** time_domain has an extra element to be able to interpolate between
+         ** samples for better time precision, hoping to eliminate artifacts.
+         */
+        spec.impl->time_domain.resize(2*speclen+1);
+        spec.impl->window.resize(2*speclen);
+        spec.impl->freq_domain.resize(2*speclen);
+        spec.impl->mag_spec.resize(speclen+1);
+        
+        spec.impl->plan = fftw_plan_r2r_1d (2 * speclen, spec.impl->time_domain.data(), spec.impl->freq_domain.data(), FFTW_R2HC, FFTW_MEASURE | FFTW_PRESERVE_INPUT) ;
+        if (spec.impl->plan == nullptr)
         {
             printf ("%s:%d : fftw create plan failed.\n", __func__, __LINE__) ;
             return {};
         } ;
-
-        switch (spec->wfunc)
-        {	case RECTANGULAR :
+        
+        switch (spec.impl->wfunc)
+        {    case WindowFunction::RECTANGULAR :
                 break ;
-            case KAISER :
-                calc_kaiser_window (spec->window.data(), 2 * speclen, 20.0) ;
+            case WindowFunction::KAISER :
+                calc_kaiser_window (spec.impl->window.data(), 2 * speclen, 20.0) ;
                 break ;
-            case NUTTALL:
-                calc_nuttall_window (spec->window.data(), 2 * speclen) ;
+            case WindowFunction::NUTTALL:
+                calc_nuttall_window (spec.impl->window.data(), 2 * speclen) ;
                 break ;
-            case HANN :
-                calc_hann_window (spec->window.data(), 2 * speclen) ;
+            case WindowFunction::HANN :
+                calc_hann_window (spec.impl->window.data(), 2 * speclen) ;
                 break ;
             default :
                 printf ("Internal error: Unknown window_function.\n") ;
                 return {};
-            } ;
-
-        return spec.release() ;
+        } ;
+        
+        return spec;
     } catch (...) {
         return {};
     }
-} /* create_spectrum */
-
-
-void destroy_spectrum (spectrum * spec)
-{
-    delete spec;
 }
 
-double calc_magnitude_spectrum (spectrum * spec)
+void swap(Spectrum& lhs, Spectrum& rhs)
 {
-	double max ;
-	int k, freqlen ;
-
-	freqlen = 2 * spec->speclen ;
-
-	if (spec->wfunc != RECTANGULAR)
-		for (k = 0 ; k < 2 * spec->speclen ; k++)
-			spec->time_domain [k] *= spec->window [k] ;
-
-
-	fftw_execute (spec->plan) ;
-
-	/* Convert from FFTW's "half complex" format to an array of magnitudes.
-	** In HC format, the values are stored:
-	** r0, r1, r2 ... r(n/2), i(n+1)/2-1 .. i2, i1
-	**/
-	max = spec->mag_spec [0] = fabs (spec->freq_domain [0]) ;
-
-	for (k = 1 ; k < spec->speclen ; k++)
-	{	double re = spec->freq_domain [k] ;
-		double im = spec->freq_domain [freqlen - k] ;
-		spec->mag_spec [k] = sqrt (re * re + im * im) ;
-		max = MAX (max, spec->mag_spec [k]) ;
-		} ;
-	/* Lastly add the point for the Nyquist frequency */
-	spec->mag_spec [spec->speclen] = fabs (spec->freq_domain [spec->speclen]) ;
-
-	return max ;
-} /* calc_magnitude_spectrum */
-
-double * spectrum_time_domain(spectrum* self)
-{
-    return self->time_domain.data();
+    std::swap(lhs.impl, rhs.impl);
 }
 
-double * spectrum_mag_spec(spectrum* self)
+Spectrum::Spectrum(Spectrum&& rhs)
+: Spectrum{}
 {
-    return self->mag_spec.data();
+    swap(*this, rhs);
+}
+
+Spectrum& Spectrum::operator=(Spectrum&& rhs)
+{
+    swap(*this, rhs);
+    return *this;
+}
+Spectrum::~Spectrum() noexcept = default;
+
+Spectrum::Spectrum()
+: impl{ std::make_unique<Impl>() }
+{}
+
+double* Spectrum::magSpec()
+{
+    return impl->mag_spec.data();
+}
+double* Spectrum::timeDomain()
+{
+    return impl->time_domain.data();
+}
+double Spectrum::calcMagnitudeSpectrum()
+{
+    double max ;
+    int k, freqlen ;
+
+    freqlen = 2 * impl->speclen ;
+
+    if (impl->wfunc != WindowFunction::RECTANGULAR)
+        for (k = 0 ; k < 2 * impl->speclen ; k++)
+            impl->time_domain [k] *= impl->window [k] ;
+
+
+    fftw_execute (impl->plan) ;
+
+    /* Convert from FFTW's "half complex" format to an array of magnitudes.
+    ** In HC format, the values are stored:
+    ** r0, r1, r2 ... r(n/2), i(n+1)/2-1 .. i2, i1
+    **/
+    max = impl->mag_spec [0] = fabs (impl->freq_domain [0]) ;
+
+    for (k = 1 ; k < impl->speclen ; k++)
+    {    double re = impl->freq_domain [k] ;
+        double im = impl->freq_domain [freqlen - k] ;
+        impl->mag_spec [k] = sqrt (re * re + im * im) ;
+        max = MAX (max, impl->mag_spec [k]) ;
+        } ;
+    /* Lastly add the point for the Nyquist frequency */
+    impl->mag_spec [impl->speclen] = fabs (impl->freq_domain [impl->speclen]) ;
+
+    return max ;
 }

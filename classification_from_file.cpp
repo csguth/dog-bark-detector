@@ -490,17 +490,9 @@ int main
             break;
         }
     }
-    spectrum *spec = create_spectrum(speclen, KAISER);
+    auto spec = Spectrum::create(speclen, WindowFunction::KAISER).value();
     
-    float **mag_spec = (float **)calloc(SPECTROGRAM_W, sizeof(float *));
-    for (i = 0; i < SPECTROGRAM_W ; ++i)
-    {
-        if ((mag_spec[i] = (float *)calloc(SPECTROGRAM_H, sizeof(float))) == NULL)
-        {
-            printf("Not enough memory\n");
-            exit(1);
-        }
-    }
+    auto mag_spec = std::vector<std::vector<float>>(SPECTROGRAM_W, std::vector<float>(SPECTROGRAM_H));
     
     cv::Mat im(SPECTROGRAM_H, SPECTROGRAM_W, CV_8UC3);
     unsigned char colour[3] = {0, 0, 0};
@@ -514,7 +506,7 @@ int main
         for (j = 0; j < SPECTROGRAM_W; ++j)
         {
             int datalen = 2 * speclen;
-            double *data = spectrum_time_domain(spec);
+            double *data = spec.timeDomain();
             memset(data, 0, 2 * speclen * sizeof(double));
             
             sf_count_t start = ((j + i * STEP_SECS * SPECTROGRAM_W / WIN_SECS) * infile.samplerate() * WIN_SECS) / SPECTROGRAM_W - speclen;
@@ -560,8 +552,8 @@ int main
                     dataout += frames_read;
                 }
             }
-            calc_magnitude_spectrum(spec);
-            interp_spec(mag_spec[j], SPECTROGRAM_H, spectrum_mag_spec(spec), speclen, MIN_FREQ, MAX_FREQ, infile.samplerate());
+            spec.calcMagnitudeSpectrum();
+            interp_spec(mag_spec[j].data(), SPECTROGRAM_H, spec.magSpec(), speclen, MIN_FREQ, MAX_FREQ, infile.samplerate());
         }
         
         // draw spectrogram
@@ -588,26 +580,12 @@ int main
         }
         cv::imshow("demo", im);
         
-        //static int ii = 0;
-        //char textt[64];
-        //sprintf(textt, "pic%d.png", ii);
-        //++ii;
-        //cv::imwrite(textt, im);
-        
         unsigned char key = cv::waitKey(10);
         if (key == 27)
         {
             break;
         }
     }
-    
-    
-    destroy_spectrum(spec);
-    for (i = 0; i < SPECTROGRAM_W ; ++i)
-    {
-        free(mag_spec[i]);
-    }
-    free(mag_spec);
     
     return 0 ;
 }

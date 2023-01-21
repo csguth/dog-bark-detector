@@ -21,7 +21,10 @@
 extern "C"{
 #endif
 
-enum WINDOW_FUNCTION { RECTANGULAR = 0, KAISER = 1, NUTTALL = 2, HANN = 3 } ;
+enum class WindowFunction
+{
+    RECTANGULAR, KAISER, NUTTALL, HANN
+};
 
 void calc_kaiser_window (double * data, int datalen, double beta) ;
 
