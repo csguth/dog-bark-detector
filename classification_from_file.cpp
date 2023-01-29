@@ -456,6 +456,7 @@ struct Spectrogram {
 namespace time_ {
     
     using Duration = double;
+    using Frequency = double;
     
     Duration fromSeconds(double seconds) {
         return seconds;
@@ -465,10 +466,18 @@ namespace time_ {
         return fromSeconds(atof(value));
     }
 
-    
-};
+    template <typename DurationType>
+    DurationType fromRatio(long long num, long long denom) {
+        if (denom == 0) {
+            throw std::runtime_error{"division by zero (num=" + std::to_string(num) + ")"};
+        }
+        return static_cast<Duration>(num) / static_cast<Duration>(denom);
+    }
+
+}
 
 using Duration = time_::Duration;
+using Frequency = time_::Frequency;
 
 int main
 (
@@ -496,18 +505,40 @@ int main
 
     const double LINEAR_SPEC_FLOOR = pow(10.0, SPEC_FLOOR_DB / 20.0);
 
+    struct Program {
+      
+        struct Lengths {
+            Duration total, window, step;
+        };
+        
+        static std::optional<Program> create(const Frequency maxFrequency, const Lengths lengths) {
+            if (lengths.window > lengths.total) {
+                return std::nullopt;
+            }
+            return Program{ maxFrequency, lengths };
+        }
+        
+        const Frequency maxFrequency;
+        const Lengths lengths;
+        
+        
+        int64_t steps() const
+        {
+            return 1 + (lengths.total-lengths.window)/lengths.step;
+        }
+        
+    private:
+        
+    };
     
-    const auto MAX_FREQ = (double)infile.samplerate() / 2.0;
-    auto const totalLength = time_::fromSeconds(static_cast<double>(infile.frames()) / infile.samplerate());
-    auto const windowLength = time_::parseDuration(av[2]);
-    auto const stepLength = time_::parseDuration(av[3]);
-    Spectrogram spectrogram{static_cast<long long>(PIXEL_WIDTH_PER_SECOND * windowLength), atoll(av[4])};
+    auto const maxFreq_{time_::fromRatio<Frequency>(infile.samplerate(), 2)};
+    auto const totalLength_{time_::fromRatio<Duration>(infile.frames(), infile.samplerate())};
+    auto const windowLength_{time_::parseDuration(av[2])};
+    auto const stepLength_{time_::parseDuration(av[3])};
     
-    if (windowLength > totalLength)
-    {
-        printf("window secs over sound file total secs\n");
-        exit(1);
-    }
+    auto const program{Program::create(maxFreq_, {totalLength_, windowLength_, stepLength_}).value()};
+    
+    Spectrogram spectrogram{static_cast<long long>(PIXEL_WIDTH_PER_SECOND * program.lengths.window), atoll(av[4])};
     
     auto speclen = spectrogram.h * (infile.samplerate() / 20 / spectrogram.h + 1);
     for (auto i = 0ll; ; ++i)
@@ -523,21 +554,24 @@ int main
             break;
         }
     }
-    std::vector<double> timeDomain(2*speclen+1);
-    std::vector<double> freqDomain(2*speclen);
+    
+    using std::vector;
+    
+    auto timeDomain = vector<double>(2*speclen+1);
+    vector<double> freqDomain(2*speclen);
     
     auto spec = Spectrum::create(speclen, timeDomain.data(), freqDomain.data()).value();
     
-    auto magSpecMatrix = std::vector<std::vector<float>>(spectrogram.w, std::vector<float>(spectrogram.h));
+    auto magSpecMatrix = vector<vector<float>>(spectrogram.w, vector<float>(spectrogram.h));
     
     cv::Mat im(spectrogram.h, spectrogram.w, CV_8UC3);
     unsigned char colour[3] = {0, 0, 0};
     
-    const auto STEPS = 1 + (totalLength - windowLength) / stepLength;
+    
     
     auto net = Network::init(av[5], av[6], spectrogram.w, spectrogram.h, 3).value();
     
-    for (auto i = 0ll; i < STEPS; ++i)
+    for (auto i = 0ll; i < program.steps(); ++i)
     {
         for (auto j = 0ll; j < spectrogram.w; ++j)
         {
@@ -547,7 +581,7 @@ int main
             auto data = timeDomain.data();
             int datalen = timeDomain.size();
                         
-            sf_count_t start = ((j + i * stepLength * spectrogram.w / windowLength) * infile.samplerate() * windowLength) / spectrogram.w - speclen;
+            sf_count_t start = ((j + i * program.lengths.step * spectrogram.w / program.lengths.window) * infile.samplerate() * program.lengths.window) / spectrogram.w - speclen;
             if (start >= 0)
             {
                 infile.seek(start, SEEK_SET);
@@ -592,7 +626,7 @@ int main
             }
             spec.applyWindow(timeDomain.data(), timeDomain.size());
             spec.executeFft();
-            magSpecMatrix[j] = interp_spec(spectrogram.h, freqDomain, MIN_FREQ, MAX_FREQ, infile.samplerate());
+            magSpecMatrix[j] = interp_spec(spectrogram.h, freqDomain, MIN_FREQ, program.maxFrequency, infile.samplerate());
         }
         
         // draw spectrogram
