@@ -449,6 +449,10 @@ is_good_speclen (int n)
     || ((n % 13 == 0) && is_2357 (n / 13)) ;
 }
 
+struct Spectrogram {
+    const long long w, h;
+};
+
 int main
 (
  int ac,
@@ -478,8 +482,7 @@ int main
     const float WIN_SECS = atof(av[2]);
     const float STEP_SECS = atof(av[3]);
     const int PIXEL_WIDTH_PER_SECOND = 100;
-    const int SPECTROGRAM_W = PIXEL_WIDTH_PER_SECOND * WIN_SECS;
-    const int SPECTROGRAM_H = atoi(av[4]);
+    Spectrogram spectrogram{static_cast<long long>(PIXEL_WIDTH_PER_SECOND * WIN_SECS), atoll(av[4])};
     const double LINEAR_SPEC_FLOOR = pow(10.0, SPEC_FLOOR_DB / 20.0);
     const double MAG_TO_NORMALIZE = 100.0;
     
@@ -489,7 +492,7 @@ int main
         exit(1);
     }
     
-    int speclen = SPECTROGRAM_H * (infile.samplerate() / 20 / SPECTROGRAM_H + 1);
+    int speclen = spectrogram.h * (infile.samplerate() / 20 / spectrogram.h + 1);
     for (i = 0; ; ++i)
     {
         if (is_good_speclen(speclen + i))
@@ -497,7 +500,7 @@ int main
             speclen += i;
             break;
         }
-        if (speclen - i >= SPECTROGRAM_H && is_good_speclen(speclen - i))
+        if (speclen - i >= spectrogram.h && is_good_speclen(speclen - i))
         {
             speclen -= i;
             break;
@@ -508,18 +511,18 @@ int main
     
     auto spec = Spectrum::create(speclen, timeDomain.data(), freqDomain.data()).value();
     
-    auto magSpecMatrix = std::vector<std::vector<float>>(SPECTROGRAM_W, std::vector<float>(SPECTROGRAM_H));
+    auto magSpecMatrix = std::vector<std::vector<float>>(spectrogram.w, std::vector<float>(spectrogram.h));
     
-    cv::Mat im(SPECTROGRAM_H, SPECTROGRAM_W, CV_8UC3);
+    cv::Mat im(spectrogram.h, spectrogram.w, CV_8UC3);
     unsigned char colour[3] = {0, 0, 0};
     
     const int STEPS = 1 + (TOTAL_SECS - WIN_SECS) / STEP_SECS;
     
-    auto net = Network::init(av[5], av[6], SPECTROGRAM_W, SPECTROGRAM_H, 3).value();
+    auto net = Network::init(av[5], av[6], spectrogram.w, spectrogram.h, 3).value();
     
     for (i = 0; i < STEPS; ++i)
     {
-        for (j = 0; j < SPECTROGRAM_W; ++j)
+        for (j = 0; j < spectrogram.w; ++j)
         {
             
             
@@ -527,7 +530,7 @@ int main
             auto data = timeDomain.data();
             int datalen = timeDomain.size();
                         
-            sf_count_t start = ((j + i * STEP_SECS * SPECTROGRAM_W / WIN_SECS) * infile.samplerate() * WIN_SECS) / SPECTROGRAM_W - speclen;
+            sf_count_t start = ((j + i * STEP_SECS * spectrogram.w / WIN_SECS) * infile.samplerate() * WIN_SECS) / spectrogram.w - speclen;
             if (start >= 0)
             {
                 infile.seek(start, SEEK_SET);
@@ -572,20 +575,20 @@ int main
             }
             spec.applyWindow(timeDomain.data(), timeDomain.size());
             spec.executeFft();
-            magSpecMatrix[j] = interp_spec(SPECTROGRAM_H, freqDomain, MIN_FREQ, MAX_FREQ, infile.samplerate());
+            magSpecMatrix[j] = interp_spec(spectrogram.h, freqDomain, MIN_FREQ, MAX_FREQ, infile.samplerate());
         }
         
         // draw spectrogram
-        for (j = 0; j < SPECTROGRAM_W; ++j)
+        for (j = 0; j < spectrogram.w; ++j)
         {
-            for (k = 0; k < SPECTROGRAM_H; ++k)
+            for (k = 0; k < spectrogram.h; ++k)
             {
                 magSpecMatrix[j][k] /= MAG_TO_NORMALIZE;
                 magSpecMatrix[j][k] = (magSpecMatrix[j][k] < LINEAR_SPEC_FLOOR) ? SPEC_FLOOR_DB : 20.0 * log10(magSpecMatrix[j][k]);
                 get_colour_map_value(magSpecMatrix[j][k], SPEC_FLOOR_DB, colour);
-                im.data[((SPECTROGRAM_H - 1 - k) * im.cols + j) * 3] = colour[2];
-                im.data[((SPECTROGRAM_H - 1 - k) * im.cols + j) * 3 + 1] = colour[1];
-                im.data[((SPECTROGRAM_H - 1 - k) * im.cols + j) * 3 + 2] = colour[0];
+                im.data[((spectrogram.h - 1 - k) * im.cols + j) * 3] = colour[2];
+                im.data[((spectrogram.h - 1 - k) * im.cols + j) * 3 + 1] = colour[1];
+                im.data[((spectrogram.h - 1 - k) * im.cols + j) * 3 + 2] = colour[0];
             }
         }
         
@@ -594,8 +597,8 @@ int main
         if (netout[0] > 0.9f)
         {
             printf("woof woof!\n");
-            cv::rectangle(im, cv::Rect(20, 10, SPECTROGRAM_W - 40, SPECTROGRAM_H - 20), cv::Scalar(255, 0, 0), 15, 16);
-            cv::putText(im, "dog bark", cv::Point(SPECTROGRAM_W/2-40, SPECTROGRAM_H/2), cv::FONT_HERSHEY_DUPLEX, 1.0, cv::Scalar(255, 0, 0), 2, 16);
+            cv::rectangle(im, cv::Rect(20, 10, spectrogram.w - 40, spectrogram.h - 20), cv::Scalar(255, 0, 0), 15, 16);
+            cv::putText(im, "dog bark", cv::Point(spectrogram.w/2-40, spectrogram.h/2), cv::FONT_HERSHEY_DUPLEX, 1.0, cv::Scalar(255, 0, 0), 2, 16);
         }
         cv::imshow("demo", im);
         
