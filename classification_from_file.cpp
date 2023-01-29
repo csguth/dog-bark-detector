@@ -472,9 +472,6 @@ int main
         exit(1);
     }
     
-    int i = 0;
-    int j = 0;
-    int k = 0;
     const double SPEC_FLOOR_DB = -180.0;
     const double MIN_FREQ = 0.0;
     const double MAX_FREQ = (double)infile.samplerate() / 2.0;
@@ -492,8 +489,8 @@ int main
         exit(1);
     }
     
-    int speclen = spectrogram.h * (infile.samplerate() / 20 / spectrogram.h + 1);
-    for (i = 0; ; ++i)
+    auto speclen = spectrogram.h * (infile.samplerate() / 20 / spectrogram.h + 1);
+    for (auto i = 0ll; ; ++i)
     {
         if (is_good_speclen(speclen + i))
         {
@@ -516,13 +513,13 @@ int main
     cv::Mat im(spectrogram.h, spectrogram.w, CV_8UC3);
     unsigned char colour[3] = {0, 0, 0};
     
-    const int STEPS = 1 + (TOTAL_SECS - WIN_SECS) / STEP_SECS;
+    const auto STEPS = 1 + (TOTAL_SECS - WIN_SECS) / STEP_SECS;
     
     auto net = Network::init(av[5], av[6], spectrogram.w, spectrogram.h, 3).value();
     
-    for (i = 0; i < STEPS; ++i)
+    for (auto i = 0ll; i < STEPS; ++i)
     {
-        for (j = 0; j < spectrogram.w; ++j)
+        for (auto j = 0ll; j < spectrogram.w; ++j)
         {
             
             
@@ -561,7 +558,7 @@ int main
                     {
                         break;
                     }
-                    for (k = 0; k < frames_read; ++k)
+                    for (auto k = 0; k < frames_read; ++k)
                     {
                         double mix = 0.0;
                         for (ch = 0; ch < infile.channels(); ++ch)
@@ -579,9 +576,9 @@ int main
         }
         
         // draw spectrogram
-        for (j = 0; j < spectrogram.w; ++j)
+        for (auto j = 0ll; j < spectrogram.w; ++j)
         {
-            for (k = 0; k < spectrogram.h; ++k)
+            for (auto k = 0ll; k < spectrogram.h; ++k)
             {
                 magSpecMatrix[j][k] /= MAG_TO_NORMALIZE;
                 magSpecMatrix[j][k] = (magSpecMatrix[j][k] < LINEAR_SPEC_FLOOR) ? SPEC_FLOOR_DB : 20.0 * log10(magSpecMatrix[j][k]);
