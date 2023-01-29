@@ -453,6 +453,23 @@ struct Spectrogram {
     const long long w, h;
 };
 
+namespace time_ {
+    
+    using Duration = double;
+    
+    Duration fromSeconds(double seconds) {
+        return seconds;
+    }
+
+    Duration parseDuration(const char* value) {
+        return fromSeconds(atof(value));
+    }
+
+    
+};
+
+using Duration = time_::Duration;
+
 int main
 (
  int ac,
@@ -472,18 +489,21 @@ int main
         exit(1);
     }
     
-    const double SPEC_FLOOR_DB = -180.0;
-    const double MIN_FREQ = 0.0;
-    const double MAX_FREQ = (double)infile.samplerate() / 2.0;
-    const float TOTAL_SECS = (float)infile.frames() / infile.samplerate();
-    const float WIN_SECS = atof(av[2]);
-    const float STEP_SECS = atof(av[3]);
-    const int PIXEL_WIDTH_PER_SECOND = 100;
-    Spectrogram spectrogram{static_cast<long long>(PIXEL_WIDTH_PER_SECOND * WIN_SECS), atoll(av[4])};
+    constexpr auto SPEC_FLOOR_DB = -180.0;
+    constexpr auto MIN_FREQ = 0.0;
+    constexpr auto PIXEL_WIDTH_PER_SECOND = 100;
+    constexpr auto MAG_TO_NORMALIZE = 100.0;
+
     const double LINEAR_SPEC_FLOOR = pow(10.0, SPEC_FLOOR_DB / 20.0);
-    const double MAG_TO_NORMALIZE = 100.0;
+
     
-    if (WIN_SECS > TOTAL_SECS)
+    const auto MAX_FREQ = (double)infile.samplerate() / 2.0;
+    auto const totalLength = time_::fromSeconds(static_cast<double>(infile.frames()) / infile.samplerate());
+    auto const windowLength = time_::parseDuration(av[2]);
+    auto const stepLength = time_::parseDuration(av[3]);
+    Spectrogram spectrogram{static_cast<long long>(PIXEL_WIDTH_PER_SECOND * windowLength), atoll(av[4])};
+    
+    if (windowLength > totalLength)
     {
         printf("window secs over sound file total secs\n");
         exit(1);
@@ -513,7 +533,7 @@ int main
     cv::Mat im(spectrogram.h, spectrogram.w, CV_8UC3);
     unsigned char colour[3] = {0, 0, 0};
     
-    const auto STEPS = 1 + (TOTAL_SECS - WIN_SECS) / STEP_SECS;
+    const auto STEPS = 1 + (totalLength - windowLength) / stepLength;
     
     auto net = Network::init(av[5], av[6], spectrogram.w, spectrogram.h, 3).value();
     
@@ -527,7 +547,7 @@ int main
             auto data = timeDomain.data();
             int datalen = timeDomain.size();
                         
-            sf_count_t start = ((j + i * STEP_SECS * spectrogram.w / WIN_SECS) * infile.samplerate() * WIN_SECS) / spectrogram.w - speclen;
+            sf_count_t start = ((j + i * stepLength * spectrogram.w / windowLength) * infile.samplerate() * windowLength) / spectrogram.w - speclen;
             if (start >= 0)
             {
                 infile.seek(start, SEEK_SET);
